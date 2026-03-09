@@ -1,5 +1,6 @@
 import type { LeaderboardEntry } from '@/types'
 import { formatTime } from '@/lib/levelUtils'
+import { LevelBadge } from './LevelBadge'
 import { Trophy, Medal } from 'lucide-react'
 
 interface LeaderboardTableProps {
@@ -64,10 +65,13 @@ export function LeaderboardTable({ entries, currentUid }: LeaderboardTableProps)
                         {entry.displayName.charAt(0).toUpperCase()}
                       </div>
                     )}
-                    <span className={isMe ? 'text-blue-300 font-semibold' : 'text-gray-200'}>
-                      {entry.displayName}
-                      {isMe && <span className="text-xs text-blue-400 ml-1">(you)</span>}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={isMe ? 'text-blue-300 font-semibold' : 'text-gray-200'}>
+                        {entry.displayName}
+                        {isMe && <span className="text-xs text-blue-400 ml-1">(you)</span>}
+                      </span>
+                      {entry.level && <LevelBadge level={entry.level} size="sm" />}
+                    </div>
                   </div>
                 </td>
                 <td className="px-4 py-3 text-right text-gray-300">

@@ -9,14 +9,14 @@ import { db, doc, runTransaction, increment } from '@/lib/firebase'
 import type { Room } from '@/types'
 import { LevelBadge } from '@/components/LevelBadge'
 import { ProblemList, LockedProblemList } from '@/components/ProblemList'
-import { formatCountdown } from '@/lib/levelUtils'
-import { ArrowLeft, Trophy, Users, Clock, Zap } from 'lucide-react'
+import { formatCountdown, formatTime } from '@/lib/levelUtils'
+import { ArrowLeft, Trophy, Users, Clock, Zap, Timer } from 'lucide-react'
 import { LEVEL_COLORS } from '@/types'
 
 export function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
 
   const [room, setRoom] = useState<Room | null>(null)
   const [loading, setLoading] = useState(true)
@@ -50,6 +50,7 @@ export function RoomPage() {
                 displayName: user.displayName ?? 'Anonymous',
                 photoURL: user.photoURL ?? '',
                 joinedAt: Date.now(),
+                level: profile?.level ?? 'beginner',
               })
               tx.update(roomRef, { totalParticipants: increment(1) })
             }
@@ -138,7 +139,7 @@ export function RoomPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 mb-5">
+          <div className="grid grid-cols-4 gap-4 mb-5">
             <div className="flex items-center gap-2 text-sm text-gray-400">
               <Clock size={14} style={{ color }} />
               <span>{isExpired ? 'Expired' : countdown}</span>
@@ -150,6 +151,10 @@ export function RoomPage() {
             <div className="flex items-center gap-2 text-sm text-gray-400">
               <Zap size={14} style={{ color }} />
               <span>10 pts / question</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              <Timer size={14} style={{ color }} />
+              <span>{formatTime(progress?.totalSolveTime ?? 0)}</span>
             </div>
           </div>
 

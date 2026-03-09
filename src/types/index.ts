@@ -60,6 +60,7 @@ export interface RoomParticipant {
   displayName: string
   photoURL: string
   joinedAt: number
+  level: Difficulty
 }
 
 export interface LeaderboardEntry {
@@ -67,6 +68,7 @@ export interface LeaderboardEntry {
   displayName: string
   photoURL: string
   joinedAt: number
+  level: Difficulty
   points: number
   solvedQuestionIds: string[]
   totalSolveTime: number

@@ -26,6 +26,7 @@ export function useLeaderboard(roomId: string | null) {
           displayName: p.displayName,
           photoURL: p.photoURL,
           joinedAt: p.joinedAt,
+          level: p.level ?? 'beginner',
           points: prog?.points ?? 0,
           solvedQuestionIds: prog?.solvedQuestionIds ?? [],
           totalSolveTime: prog?.totalSolveTime ?? 0,

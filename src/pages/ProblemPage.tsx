@@ -2,17 +2,19 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import Editor from '@monaco-editor/react'
 import { useAuth } from '@/hooks/useAuth'
-import { getCachedRoom } from '@/lib/variantCache'
+import { getCachedRoom, updateCachedVariant } from '@/lib/variantCache'
 import { runCodeInWorker, parseFirestoreTestCases } from '@/lib/codeWorker'
 import { recordSolve, useProgress, updateUserLevel } from '@/hooks/useProgress'
 import { getRoomById } from '@/hooks/useRoom'
 import { checkLevelUp } from '@/lib/levelUtils'
 import { db, doc, getDoc, updateDoc, increment } from '@/lib/firebase'
 import type { Question, Variant, TestResult, Room } from '@/types'
+import { generateVariant } from '@/lib/groq'
 import { ResultPanel } from '@/components/ResultPanel'
 import { LevelBadge } from '@/components/LevelBadge'
+
 import {
-  ArrowLeft, Play, Send, Trophy, ChevronRight, CheckCircle, Loader2
+  ArrowLeft, Play, Send, Trophy, ChevronRight, CheckCircle, Loader2, RefreshCw
 } from 'lucide-react'
 
 export function ProblemPage() {
@@ -29,9 +31,23 @@ export function ProblemPage() {
   const [submitting, setSubmitting] = useState(false)
   const [alreadySolved, setAlreadySolved] = useState(false)
   const [levelUpMsg, setLevelUpMsg] = useState<string | null>(null)
+  const [refreshingVariant, setRefreshingVariant] = useState(false)
 
   const { progress, setProgress } = useProgress(roomId ?? null, user?.uid ?? null)
-  const openedAtRef = useRef<number>(Date.now())
+
+  // Persist open timestamp in sessionStorage so a page refresh doesn't reset the timer
+  const openedAtRef = useRef<number>(0)
+  if (openedAtRef.current === 0) {
+    const key = `funcode_opened_${roomId}_${questionId}`
+    const stored = sessionStorage.getItem(key)
+    if (stored) {
+      openedAtRef.current = parseInt(stored, 10)
+    } else {
+      const now = Date.now()
+      sessionStorage.setItem(key, String(now))
+      openedAtRef.current = now
+    }
+  }
 
   useEffect(() => {
     if (!roomId || !questionId || !user) return
@@ -110,6 +126,9 @@ export function ProblemPage() {
         progress,
       )
 
+      // Clear the persisted timer — question is done
+      sessionStorage.removeItem(`funcode_opened_${roomId}_${questionId}`)
+
       setProgress(newProgress)
       setAlreadySolved(true)
 
@@ -118,18 +137,34 @@ export function ProblemPage() {
       })
 
       const newTotalSolved = (profile.totalSolvedCount ?? 0) + 1
-      const newLevel = checkLevelUp(
-        profile.level,
-        newProgress.solvedQuestionIds.length,
-        newProgress.totalSolveTime,
-      )
 
-      if (newLevel !== profile.level) {
-        await updateUserLevel(user.uid, newLevel, newTotalSolved)
-        setLevelUpMsg(`Level Up! You are now ${newLevel.charAt(0).toUpperCase() + newLevel.slice(1)}!`)
+      // Level-up only applies when solving the user's own level room
+      if (room && room.level === profile.level) {
+        const newLevel = checkLevelUp(
+          profile.level,
+          newProgress.solvedQuestionIds.length,
+          newProgress.totalSolveTime,
+        )
+
+        if (newLevel !== profile.level) {
+          await updateUserLevel(user.uid, newLevel, newTotalSolved)
+          setLevelUpMsg(`Level Up! You are now ${newLevel.charAt(0).toUpperCase() + newLevel.slice(1)}!`)
+        }
       }
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleRefreshVariant = async () => {
+    if (!roomId || !user || !question || alreadySolved || refreshingVariant) return
+    setRefreshingVariant(true)
+    try {
+      const newVariant = await generateVariant(question)
+      updateCachedVariant(roomId, user.uid, newVariant)
+      setVariant(newVariant)
+    } finally {
+      setRefreshingVariant(false)
     }
   }
 
@@ -189,6 +224,20 @@ export function ProblemPage() {
                 <span className="text-xs text-green-500 bg-green-900/20 border border-green-800/40 rounded-full px-2 py-0.5">
                   ✓ Solved
                 </span>
+              )}
+              {!alreadySolved && (
+                <button
+                  onClick={handleRefreshVariant}
+                  disabled={refreshingVariant}
+                  title="Get a different variant of this question"
+                  className="ml-auto flex items-center gap-1 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded px-2 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {refreshingVariant
+                    ? <Loader2 size={11} className="animate-spin" />
+                    : <RefreshCw size={11} />
+                  }
+                  {refreshingVariant ? 'Refreshing...' : 'New Variant'}
+                </button>
               )}
             </div>
 

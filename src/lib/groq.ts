@@ -7,10 +7,13 @@ const groq = new Groq({
 })
 
 const VARIANT_PROMPT = (q: Question) => `
-You are a DSA problem setter. Rewrite the following problem with a completely new theme or real-world context.
-Keep the exact same algorithm and data structure required to solve it.
-Change the title, description, and examples to fit the new theme.
-The examples must be valid for the same underlying algorithm.
+You are a DSA question variant generator.
+
+STRICT RULES — NEVER BREAK THESE:
+1. DO NOT change any input/output values in the examples
+2. DO NOT change constraints (numbers must stay exactly the same)
+3. ONLY change the story, variable names, and context
+4. The examples must have IDENTICAL numbers/values as the original
 
 Original problem:
 Title: ${q.title}
@@ -25,13 +28,15 @@ Respond with ONLY valid JSON in this exact format (no markdown, no explanation):
     { "input": "...", "output": "...", "explanation": "..." }
   ]
 }
+
+REMINDER: The input/output values in variantExamples must be 100% identical to the original examples. Only the story and explanation change.
 `
 
 export async function generateVariant(question: Question): Promise<Variant> {
   const completion = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [{ role: 'user', content: VARIANT_PROMPT(question) }],
-    temperature: 0.8,
+    temperature: 0.4,
     max_tokens: 1024,
   })
 

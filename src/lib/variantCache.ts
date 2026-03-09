@@ -62,6 +62,15 @@ export function markRoomJoined(roomId: string, uid: string): void {
   localStorage.setItem(joinKey(roomId, uid), '1')
 }
 
+export function updateCachedVariant(roomId: string, uid: string, newVariant: Variant): void {
+  const cache = getCachedRoom(roomId, uid)
+  if (!cache) return
+  const updated = cache.variants.map((v) =>
+    v.questionId === newVariant.questionId ? newVariant : v
+  )
+  setCachedRoom(roomId, uid, cache.expiryDate, cache.problemOrder, updated)
+}
+
 export function shuffleArray<T>(arr: T[]): T[] {
   const copy = [...arr]
   for (let i = copy.length - 1; i > 0; i--) {
