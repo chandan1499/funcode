@@ -16,7 +16,7 @@ import {
   getPastRooms,
   deleteExpiredRooms,
 } from '@/lib/roomUtils'
-import { Code2, Trophy, LogOut, History, ChevronRight } from 'lucide-react'
+import { Code2, LogOut, History, ChevronRight } from 'lucide-react'
 
 export function Dashboard() {
   const { user, profile, logout } = useAuth()
@@ -66,7 +66,6 @@ export function Dashboard() {
 
   const userLevelIdx = profile ? LEVEL_ORDER.indexOf(profile.level) : -1
 
-  const ownLevelRoom = rooms.find((r) => r.level === profile?.level) ?? null
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#0d1117' }}>
@@ -76,15 +75,6 @@ export function Dashboard() {
           <span className="text-white font-bold text-lg">FunCode</span>
         </div>
         <div className="flex items-center gap-4">
-          {ownLevelRoom && (
-            <Link
-              to={`/room/${ownLevelRoom.id}/leaderboard`}
-              className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors"
-            >
-              <Trophy size={15} />
-              Leaderboard
-            </Link>
-          )}
           <div className="flex items-center gap-2">
             {user?.photoURL && (
               <img src={user.photoURL} alt="" className="w-7 h-7 rounded-full" />
