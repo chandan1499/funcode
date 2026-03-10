@@ -2,19 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import Editor from '@monaco-editor/react'
 import { useAuth } from '@/hooks/useAuth'
-import { getCachedRoom, updateCachedVariant } from '@/lib/variantCache'
+import { getCachedRoom, saveCode, loadSavedCode, clearSavedCode } from '@/lib/variantCache'
 import { runCodeInWorker, parseFirestoreTestCases } from '@/lib/codeWorker'
 import { recordSolve, useProgress, updateUserLevel } from '@/hooks/useProgress'
 import { getRoomById } from '@/hooks/useRoom'
 import { checkLevelUp } from '@/lib/levelUtils'
 import { db, doc, getDoc, updateDoc, increment } from '@/lib/firebase'
 import type { Question, Variant, TestResult, Room } from '@/types'
-import { generateVariant } from '@/lib/groq'
 import { ResultPanel } from '@/components/ResultPanel'
 import { LevelBadge } from '@/components/LevelBadge'
 
 import {
-  ArrowLeft, Play, Send, Trophy, ChevronRight, CheckCircle, Loader2, RefreshCw
+  ArrowLeft, Play, Send, Trophy, ChevronRight, ChevronLeft, CheckCircle, Loader2, RefreshCw
 } from 'lucide-react'
 
 export function ProblemPage() {
@@ -31,7 +30,20 @@ export function ProblemPage() {
   const [submitting, setSubmitting] = useState(false)
   const [alreadySolved, setAlreadySolved] = useState(false)
   const [levelUpMsg, setLevelUpMsg] = useState<string | null>(null)
-  const [refreshingVariant, setRefreshingVariant] = useState(false)
+  const [showingOriginal, setShowingOriginal] = useState(false)
+
+  // Derived prev/next navigation from cached problem order
+  const navIds = (() => {
+    if (!roomId || !user) return { prevId: null, nextId: null }
+    const cache = getCachedRoom(roomId, user.uid)
+    if (!cache) return { prevId: null, nextId: null }
+    const orderedIds = cache.problemOrder.map((idx) => cache.variants[idx]?.questionId).filter(Boolean)
+    const currentIdx = orderedIds.indexOf(questionId ?? '')
+    return {
+      prevId: currentIdx > 0 ? orderedIds[currentIdx - 1] : null,
+      nextId: currentIdx < orderedIds.length - 1 ? orderedIds[currentIdx + 1] : null,
+    }
+  })()
 
   const { progress, setProgress } = useProgress(roomId ?? null, user?.uid ?? null)
 
@@ -75,7 +87,9 @@ export function ProblemPage() {
           testCases: parseFirestoreTestCases(raw.testCases ?? []),
         } as Question
         setQuestion(q)
-        setCode(q.starterCode)
+        setShowingOriginal(false)
+        const saved = user ? loadSavedCode(roomId!, qSnap.id, user.uid) : null
+        setCode(saved ?? q.starterCode)
       }
 
       const cache = getCachedRoom(roomId, user.uid)
@@ -126,8 +140,9 @@ export function ProblemPage() {
         progress,
       )
 
-      // Clear the persisted timer — question is done
+      // Clear the persisted timer and saved code — question is done
       sessionStorage.removeItem(`funcode_opened_${roomId}_${questionId}`)
+      if (user) clearSavedCode(roomId, questionId, user.uid)
 
       setProgress(newProgress)
       setAlreadySolved(true)
@@ -156,17 +171,6 @@ export function ProblemPage() {
     }
   }
 
-  const handleRefreshVariant = async () => {
-    if (!roomId || !user || !question || alreadySolved || refreshingVariant) return
-    setRefreshingVariant(true)
-    try {
-      const newVariant = await generateVariant(question)
-      updateCachedVariant(roomId, user.uid, newVariant)
-      setVariant(newVariant)
-    } finally {
-      setRefreshingVariant(false)
-    }
-  }
 
   if (!room || !question || !variant) {
     return (
@@ -227,45 +231,52 @@ export function ProblemPage() {
               )}
               {!alreadySolved && (
                 <button
-                  onClick={handleRefreshVariant}
-                  disabled={refreshingVariant}
-                  title="Get a different variant of this question"
-                  className="ml-auto flex items-center gap-1 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded px-2 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => setShowingOriginal((v) => !v)}
+                  title={showingOriginal ? 'Back to variant' : 'Show original question'}
+                  className="ml-auto flex items-center gap-1 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded px-2 py-1 transition-colors"
                 >
-                  {refreshingVariant
-                    ? <Loader2 size={11} className="animate-spin" />
-                    : <RefreshCw size={11} />
-                  }
-                  {refreshingVariant ? 'Refreshing...' : 'New Variant'}
+                  <RefreshCw size={11} />
+                  {showingOriginal ? 'Show Variant' : 'Show Original'}
                 </button>
               )}
             </div>
 
-            <h1 className="text-xl font-bold text-white mb-4">{variant.variantTitle}</h1>
+            <h1 className="text-xl font-bold text-white mb-4">
+              {showingOriginal ? question.title : variant.variantTitle}
+            </h1>
 
-            <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap mb-6">
-              {variant.variantDescription}
-            </div>
-
-            {variant.variantExamples.length > 0 && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Examples</h3>
-                <div className="space-y-3">
-                  {variant.variantExamples.map((ex, idx) => (
-                    <div key={idx} className="bg-gray-900/60 border border-gray-800 rounded-lg p-3">
-                      <div className="text-xs font-semibold text-gray-500 mb-2">Example {idx + 1}</div>
-                      <div className="font-mono text-xs space-y-1">
-                        <div><span className="text-gray-500">Input:</span> <span className="text-gray-200">{ex.input}</span></div>
-                        <div><span className="text-gray-500">Output:</span> <span className="text-green-300">{ex.output}</span></div>
-                        {ex.explanation && (
-                          <div className="text-gray-500 pt-1">{ex.explanation}</div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            {showingOriginal && (
+              <div className="mb-3 text-xs text-amber-400/80 bg-amber-900/10 border border-amber-700/30 rounded px-2.5 py-1.5">
+                Showing original question
               </div>
             )}
+
+            <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap mb-6">
+              {showingOriginal ? question.description : variant.variantDescription}
+            </div>
+
+            {(() => {
+              const examples = showingOriginal ? question.examples : variant.variantExamples
+              return examples.length > 0 ? (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Examples</h3>
+                  <div className="space-y-3">
+                    {examples.map((ex, idx) => (
+                      <div key={idx} className="bg-gray-900/60 border border-gray-800 rounded-lg p-3">
+                        <div className="text-xs font-semibold text-gray-500 mb-2">Example {idx + 1}</div>
+                        <div className="font-mono text-xs space-y-1">
+                          <div><span className="text-gray-500">Input:</span> <span className="text-gray-200">{ex.input}</span></div>
+                          <div><span className="text-gray-500">Output:</span> <span className="text-green-300">{ex.output}</span></div>
+                          {ex.explanation && (
+                            <div className="text-gray-500 pt-1">{ex.explanation}</div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null
+            })()}
 
             <div className="mt-6">
               <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">Tags</h3>
@@ -277,6 +288,26 @@ export function ProblemPage() {
                 ))}
               </div>
             </div>
+
+            {/* Prev / Next navigation */}
+            <div className="mt-8 pt-4 border-t border-gray-800 flex items-center justify-between gap-2">
+              <button
+                onClick={() => navIds.prevId && navigate(`/room/${roomId}/problem/${navIds.prevId}`)}
+                disabled={!navIds.prevId}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft size={13} />
+                Previous
+              </button>
+              <button
+                onClick={() => navIds.nextId && navigate(`/room/${roomId}/problem/${navIds.nextId}`)}
+                disabled={!navIds.nextId}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+                <ChevronRight size={13} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -286,7 +317,13 @@ export function ProblemPage() {
               height="100%"
               defaultLanguage="javascript"
               value={code}
-              onChange={(v) => setCode(v ?? '')}
+              onChange={(v) => {
+                const next = v ?? ''
+                setCode(next)
+                if (roomId && questionId && user && room) {
+                  saveCode(roomId, questionId, user.uid, next, room.expiryDate)
+                }
+              }}
               theme="vs-dark"
               options={{
                 fontSize: 14,

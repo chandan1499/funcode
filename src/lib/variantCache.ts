@@ -38,8 +38,8 @@ export function pruneExpiredCaches(): void {
     try {
       const raw = localStorage.getItem(key)
       if (!raw) continue
-      const cache: RoomCache = JSON.parse(raw)
-      if (Date.now() > cache.expiryDate) {
+      const parsed: { expiryDate?: number } = JSON.parse(raw)
+      if (parsed.expiryDate && Date.now() > parsed.expiryDate) {
         keysToRemove.push(key)
       }
     } catch {
@@ -47,6 +47,49 @@ export function pruneExpiredCaches(): void {
     }
   }
   keysToRemove.forEach((k) => localStorage.removeItem(k))
+}
+
+// ── Code persistence helpers ──────────────────────────────────────────────────
+
+function codeKey(roomId: string, questionId: string, uid: string): string {
+  return `funcode_code_${roomId}_${questionId}_${uid}`
+}
+
+export function saveCode(
+  roomId: string,
+  questionId: string,
+  uid: string,
+  code: string,
+  expiryDate: number,
+): void {
+  try {
+    localStorage.setItem(codeKey(roomId, questionId, uid), JSON.stringify({ code, expiryDate }))
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function loadSavedCode(
+  roomId: string,
+  questionId: string,
+  uid: string,
+): string | null {
+  try {
+    const raw = localStorage.getItem(codeKey(roomId, questionId, uid))
+    if (!raw) return null
+    const { code, expiryDate } = JSON.parse(raw) as { code: string; expiryDate: number }
+    if (Date.now() > expiryDate) {
+      localStorage.removeItem(codeKey(roomId, questionId, uid))
+      return null
+    }
+    return code
+  } catch {
+    return null
+  }
+}
+
+export function clearSavedCode(roomId: string, questionId: string, uid: string): void {
+  localStorage.removeItem(codeKey(roomId, questionId, uid))
 }
 
 // Separate join-tracking key — not tied to variant cache lifetime

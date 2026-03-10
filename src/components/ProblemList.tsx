@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import type { RoomCache, RoomProgress } from '@/types'
-import { CheckCircle, Circle, Lock } from 'lucide-react'
+import { CheckCircle, Circle, Lock, Timer } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface ProblemListProps {
@@ -19,6 +19,7 @@ export function ProblemList({ roomId, cache, progress }: ProblemListProps) {
     <div className="space-y-2">
       {orderedVariants.map((variant, displayIdx) => {
         const isSolved = solvedIds.has(variant.questionId)
+        const isActive = !isSolved && !!sessionStorage.getItem(`funcode_opened_${roomId}_${variant.questionId}`)
         return (
           <button
             key={variant.questionId}
@@ -27,6 +28,8 @@ export function ProblemList({ roomId, cache, progress }: ProblemListProps) {
               'w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-left transition-all',
               isSolved
                 ? 'border-green-700/40 bg-green-900/10 hover:bg-green-900/20'
+                : isActive
+                ? 'border-amber-700/40 bg-amber-900/10 hover:bg-amber-900/20'
                 : 'border-gray-700/40 bg-gray-900/20 hover:bg-gray-800/40',
             )}
           >
@@ -34,6 +37,8 @@ export function ProblemList({ roomId, cache, progress }: ProblemListProps) {
             <span className="shrink-0">
               {isSolved ? (
                 <CheckCircle size={16} className="text-green-500" />
+              ) : isActive ? (
+                <Timer size={16} className="text-amber-400" />
               ) : (
                 <Circle size={16} className="text-gray-600" />
               )}

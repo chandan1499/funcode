@@ -16,7 +16,7 @@ import {
   getPastRooms,
   deleteExpiredRooms,
 } from '@/lib/roomUtils'
-import { Code2, LogOut, History, ChevronRight } from 'lucide-react'
+import { Code2, LogOut, History, ChevronRight, Pin } from 'lucide-react'
 
 export function Dashboard() {
   const { user, profile, logout } = useAuth()
@@ -65,6 +65,14 @@ export function Dashboard() {
   }, [profile?.level])
 
   const userLevelIdx = profile ? LEVEL_ORDER.indexOf(profile.level) : -1
+
+  // Pin user's level room to top, keep rest sorted by LEVEL_ORDER
+  const sortedRooms = profile
+    ? [
+        ...rooms.filter((r) => r.level === profile.level),
+        ...rooms.filter((r) => r.level !== profile.level),
+      ]
+    : rooms
 
 
   return (
@@ -136,7 +144,7 @@ export function Dashboard() {
           </div>
         ) : (
           <div className="space-y-4">
-            {rooms.map((room) => {
+            {sortedRooms.map((room) => {
               const roomLevelIdx = LEVEL_ORDER.indexOf(room.level)
               const isLocked = roomLevelIdx > userLevelIdx
               const isOwnLevel = room.level === profile?.level
@@ -144,23 +152,25 @@ export function Dashboard() {
               return (
                 <div key={room.id}>
                   {isOwnLevel && (
-                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                      <span
-                        className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block"
-                      />
-                      Your Room
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Pin size={11} className="text-green-400" />
+                      <span className="text-xs font-semibold text-green-400 uppercase tracking-wider">
+                        Your Room
+                      </span>
                     </div>
                   )}
-                  {isLocked ? (
-                    <RoomCard
-                      room={room}
-                      progress={null}
-                      generating={false}
-                      locked={true}
-                    />
-                  ) : user ? (
-                    <RoomCardWithProgress room={room} uid={user.uid} />
-                  ) : null}
+                  <div className={isOwnLevel ? 'ring-1 ring-green-700/50 rounded-xl' : undefined}>
+                    {isLocked ? (
+                      <RoomCard
+                        room={room}
+                        progress={null}
+                        generating={false}
+                        locked={true}
+                      />
+                    ) : user ? (
+                      <RoomCardWithProgress room={room} uid={user.uid} />
+                    ) : null}
+                  </div>
                 </div>
               )
             })}
