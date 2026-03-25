@@ -3,9 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { useVariants } from '@/hooks/useVariants'
 import { useProgress } from '@/hooks/useProgress'
-import { getRoomById } from '@/hooks/useRoom'
 import { pruneExpiredCaches, hasJoinedRoom, markRoomJoined } from '@/lib/variantCache'
-import { db, doc, runTransaction, increment } from '@/lib/firebase'
+import { db, doc, runTransaction, increment, getDocFromServer } from '@/lib/firebase'
 import type { Room } from '@/types'
 import { LevelBadge } from '@/components/LevelBadge'
 import { ProblemList, LockedProblemList } from '@/components/ProblemList'
@@ -33,7 +32,10 @@ export function RoomPage() {
     async function load() {
       if (!roomId || !user) return
       setLoading(true)
-      const r = await getRoomById(roomId)
+      const snap = await getDocFromServer(doc(db, 'rooms', roomId))
+      const r = snap.exists()
+        ? ({ id: snap.id, ...snap.data() } as Room)
+        : null
       setRoom(r)
 
       if (r) {
@@ -42,7 +44,7 @@ export function RoomPage() {
           const roomRef = doc(db, 'rooms', r.id)
 
           // Atomic transaction: only one concurrent call can write + increment
-          await runTransaction(db, async (tx) => {
+          const didIncrement = await runTransaction(db, async (tx) => {
             const participantSnap = await tx.get(participantRef)
             if (!participantSnap.exists()) {
               tx.set(participantRef, {
@@ -53,10 +55,20 @@ export function RoomPage() {
                 level: profile?.level ?? 'beginner',
               })
               tx.update(roomRef, { totalParticipants: increment(1) })
+              return true
             }
+            return false
           })
 
           markRoomJoined(r.id, user.uid)
+          // onSnapshot/cache can still return stale totalParticipants right after the transaction; bump locally when we know the write happened
+          if (didIncrement) {
+            setRoom((prev) =>
+              prev
+                ? { ...prev, totalParticipants: (prev.totalParticipants ?? 0) + 1 }
+                : prev,
+            )
+          }
         }
         setCountdown(formatCountdown(r.expiryDate))
       }

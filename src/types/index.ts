@@ -107,11 +107,11 @@ export interface TestResult {
 export const LEVEL_ORDER: Difficulty[] = ['beginner', 'easy', 'medium', 'hard', 'pro']
 
 export const LEVEL_TIME_LIMITS: Record<Difficulty, number> = {
-  beginner: 25 * 60 * 1000,
-  easy: 35 * 60 * 1000,
-  medium: 50 * 60 * 1000,
-  hard: 80 * 60 * 1000,
-  pro: 120 * 60 * 1000,
+  beginner: 60 * 60 * 1000,
+  easy: 90 * 60 * 1000,
+  medium: 120 * 60 * 1000,
+  hard: 150 * 60 * 1000,
+  pro: 210 * 60 * 1000,
 }
 
 export const LEVEL_LABELS: Record<Difficulty, string> = {
